@@ -7,11 +7,28 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+remove(list = ls())
+setwd('/home/felix/Documents/R/')
+library(car)
+library(lmtest)
+library(AER)
+library(fBasics)
+library(ggplot2)
+library(Hmisc)
+library(readstata13)
+library(tidyverse) 
+library(maxLik)
+library(micEcon)
 ```
 
-## R Markdown
+Importing the databases
 
-```{r libraries}
-summary(cars)
+```{r read}
+city <- read.dta13("citydata.dta",nonint.factors = TRUE)
+country <- read.dta13("countrydata.dta",nonint.factors = TRUE)
+countryally <- read.dta13("countrydata_allyears.dta",nonint.factors = TRUE)
+region <- read.dta13("regiondata.dta",nonint.factors = TRUE)
 ```
 
+
+```
