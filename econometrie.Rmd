@@ -31,6 +31,7 @@ region <- read.dta13("regiondata.dta",nonint.factors = TRUE)
 ```
 
 
+
 ```{r basic stats}
 ggplot(country, aes(year,sm0_2moistu, colour=iso3v10, group=iso3v10)) + geom_point() +geom_line()
 #urbanization rate
@@ -42,15 +43,16 @@ for (i in 2:60){
     country$precgrowth[i] <- (country$sm0_2preu[i]-country$sm0_2preu[i-1])/country$sm0_2preu[i-1] 
   }
 }
+country$urbgrowth[36]<- NA #valeur énorme par rapport aux autres fausse
 reg1 <- lm(moistgrowth ~ urbgrowth, data = country)
 summary(reg1)
-ggplot(country, aes(urbgrowth,moistgrowth))+geom_point()+geom_smooth(method=lm)
+ggplot(country, aes(urbgrowth,moistgrowth))+geom_point()+geom_smooth()
 reg2 <- lm(tempgrowth ~ urbgrowth, data = country)
 summary(reg2)
-ggplot(country, aes(urbgrowth,tempgrowth))+geom_point()+geom_smooth(method=lm)
+ggplot(country, aes(urbgrowth,tempgrowth))+geom_point()+geom_smooth()
 reg3 <- lm(precgrowth ~ urbgrowth, data = country)
 summary(reg3)
-ggplot(country, aes(urbgrowth,precgrowth))+geom_point()+geom_smooth(method=lm)
+ggplot(country, aes(urbgrowth,precgrowth))+geom_point()+geom_smooth()
 #pas de corrélation observée au niveau national
 #aucune relation significative et R-squared ridicules
 
