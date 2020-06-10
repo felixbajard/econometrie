@@ -162,9 +162,26 @@ heterog2 <- do.call(rbind, Map(data.frame, annee=annee_, mean_annee=mean_annee))
 ggplot(heterog, aes(x=pays, y=mean_pays))+geom_line()+geom_point()
 ggplot(heterog2, aes(x=annee, y=mean_annee))+geom_line()+geom_point()
 
-reg25 <-lm(dlnl1 ~  dlnrain30+ factor(year) - 1, data=city)
+reg25 <-lm(dlnl1 ~  dlnrain30+hirain_dlnrain+ factor(year) - 1, data=city)
 summary(reg25)
 plot(reg25)
+#^pour tenir compte des fixed effects de l'année du test
+
+reg25b <-lm(dlnl1 ~  dlnrain30+hirain_dlnrain+ factor(agidison) - 1, data=city)
+summary(reg25b)
+#^pour tenir compte des fixed effects de la ville du test
+
+reg25c <-lm(dlnl1 ~  dlnrain30+hirain_dlnrain+ factor(iso3v10) - 1, data=city)
+summary(reg25c)
+#^pour tenir compte des fixed effects du pays du test
+
+reg25d <-lm(dlnl1 ~  dlnrain30+hirain_dlnrain+ agidison + year - 1, data=city)
+summary(reg25d)
+#^combined fixed effects
+
+reg25e <-plm(dlnl1 ~  dlnrain30+hirain_dlnrain+agidison+year, data=city, model='within', effect='twoways', index=c('agidison','year'))
+summary(reg25e)
+#^combined fixed effects (même chose qu'au dessus normalement!!!!!)
 
 reg26 <- plm(dlnl1 ~ dlnrain30+extent_agE_dlnrain, data=city, model='within', index=c('agidison','year'))
 
@@ -176,7 +193,16 @@ summary(reg27)    #random effects
 #To decide between fixed or random effects you can run a Hausman test where the null hypothesis is that the preferred model is random effects vs. the alternative the fixed effects (see Green, 2008, chapter 9). It basically tests whether the unique errors (ui) are correlated with the regressors, the null hypothesis is they are not. Run a fixed effects model and save the estimates, then run a random model and save the estimates, then perform the test. If the p-value is significant (for example <0.05) then use fixed effects, if not use random effects.
 phtest(reg26, reg27)  # => random effects 
 
-reg28 <- plm(dlnl1 ~ year + agidison + dlnrain30 + D_ag30 + hirain_extent_agH_dlnrain + hirain_extent_agE_dlnrain, data = city, model='random', index=c('agidison','year'))
+reg28 <- plm(dlnl1 ~ dlnrain30 + D_ag30_dlnrain + extent_agE_dlnrain, data = city, model='random', index=c('agidison'))
 summary(reg28)
 
+
+reg29 <- plm(dlnl1 ~ dlnrain30 + hirain_dlnrain, data = city, model='random', index=c('agidison','year'))
+summary(reg29)
+
+reg30 <- plm(dlnl1 ~ dlnrain30+ extent_agH_dlnrain, data = city, model='random', index=c('agidison','year'))
+summary(reg30)
 ```
+
+
+
