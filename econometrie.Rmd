@@ -19,17 +19,18 @@ library(readstata13)
 library(tidyverse) 
 library(maxLik)
 library(micEcon)
+library(plm)
+library(foreign)
 ```
 
 Importing the databases
 
 ```{r read}
-city <- read.dta13("citydata.dta",nonint.factors = TRUE)
-country <- read.dta13("countrydata.dta",nonint.factors = TRUE)
-countryally <- read.dta13("countrydata_allyears.dta",nonint.factors = TRUE)
-region <- read.dta13("regiondata.dta",nonint.factors = TRUE)
+city <- read.dta13("citydata.dta")
+country <- read.dta13("countrydata.dta")
+countryally <- read.dta13("countrydata_allyears.dta")
+region <- read.dta13("regiondata.dta")
 ```
-
 
 
 ```{r basic stats}
@@ -37,10 +38,10 @@ ggplot(country, aes(year,sm0_2moistu, colour=iso3v10, group=iso3v10)) + geom_poi
 #urbanization rate
 for (i in 2:60){
   if (country$iso3v10[i-1]==country$iso3v10[i]){
-    country$urbgrowth[i] <- (country$urbfrac[i]-country$urbfrac[i-1])/country$urbfrac[i-1] 
-    country$moistgrowth[i] <- (country$sm0_2moistu[i]-country$sm0_2moistu[i-1])/country$sm0_2moistu[i-1] 
-    country$tempgrowth[i] <- (country$sm0_2tmpu[i]-country$sm0_2tmpu[i-1])/country$sm0_2tmpu[i-1] 
-    country$precgrowth[i] <- (country$sm0_2preu[i]-country$sm0_2preu[i-1])/country$sm0_2preu[i-1] 
+    country$urbgrowth[i] <- (country$urbfrac[i]-country$urbfrac[i-1])/(country$urbfrac[i-1]*country$yearssince_prev_census[i]) 
+    country$moistgrowth[i] <- (country$sm0_2moistu[i]-country$sm0_2moistu[i-1])/(country$sm0_2moistu[i-1] *country$yearssince_prev_census[i]) 
+    country$tempgrowth[i] <- (country$sm0_2tmpu[i]-country$sm0_2tmpu[i-1])/(country$sm0_2tmpu[i-1] *country$yearssince_prev_census[i]) 
+    country$precgrowth[i] <- (country$sm0_2preu[i]-country$sm0_2preu[i-1])/(country$sm0_2preu[i-1] *country$yearssince_prev_census[i]) 
   }
 }
 country$urbgrowth[36]<- NA #valeur énorme par rapport aux autres fausse
@@ -55,5 +56,127 @@ summary(reg3)
 ggplot(country, aes(urbgrowth,precgrowth))+geom_point()+geom_smooth()
 #pas de corrélation observée au niveau national
 #aucune relation significative et R-squared ridicules
+
+```
+```{r first tests}
+reg9 <- lm (urbpop ~ tmpu + petu + preu + year + totpop + centdistcoast + extent_agH + extent_agE, data = region)
+summary(reg9)
+
+reg10 <- lm(urbpop ~ tmpu + petu + preu + year + totpop, data = region)
+summary(reg10)
+
+reg11 <- lm(urbpop ~ ADsm0_2moistu + ADsm0_2tmpu + ADsm0_2preu + year + totpop + primurbpop + sum_agH + sum_agE, data = country)
+summary(reg11)
+
+reg12 <- lm(lnl1 ~ agidison + lnrain30 + hirain + extent_agE + extent_agH, data = city)
+summary(reg12)
+
+reg13 <- lm(dlnl1 ~ year + dlnrain30 + D_ag30 + hirain_extent_agH_dlnrain + hirain_extent_agE_dlnrain, data = city)
+summary(reg13)
+
+reg14 <- lm(dlnl1 ~ year + agidison + dlnrain30 + D_ag30 + hirain_extent_agH_dlnrain + hirain_extent_agE_dlnrain, data = city)
+summary(reg14)
+
+reg15 <- lm(dlnl1 ~ year + agidison + dlnrain30 + D_ag30 + extent_agH + extent_agE + hirain_extent_agH_dlnrain + hirain_extent_agE_dlnrain, data = city)
+summary(reg15)
+reg16 <- lm(ADurbfrac ~ ADsm0_2moistu + ADsm0_2preu + ADsm0_2tmpu + extent_agE + extent_agH + centdistcoast + totpop, data = region)
+summary(reg16)
+reg17 <- lm(ADurbfrac ~ ADsm0_2moistu + ADsm0_2preu + ADsm0_2tmpu + extent_agE + extent_agH + centdistcoast + firsturbfrac, data = region)
+summary(reg17)
+reg18 <- lm(ADurbfrac ~ ADsm0_2moistu + ADsm0_2preu + ADsm0_2tmpu + extent_agE + extent_agH + centdistcoast + firsturbfrac + areasqkm + extent_agH_ADsm0_2moistu + extent_agH_ADsm0_2preu + extent_agH_ADsm0_2tmpu, data = region)
+summary(reg18)
+#cela ne donne rien du tout de rajouter cela
+reg19 <- lm(ADurbfrac ~ ADsm0_2moistu + ADsm0_2preu + ADsm0_2tmpu + extent_agE + extent_agH + centdistcoast + D_moist_GT1 + totpop, data = region)
+summary(reg19)
+#bof aussi mais coeff significatifs sont a peu près égaux avec ceux de la 16
+```
+```{r encore}
+#reg20 <- ivreg(ADurbfrac ~ ADsm0_2moistu + extent_agE + extent_agH | extent_agE+ extent_agH+ centdistcoast + firsturbfrac + areasqkm, data = region)
+#summary(reg20)
+
+#reg21 <- plm(dlnl1 ~ dlnrain30+extent_agE_dlnrain, data = city, model = "random", index = "agidison")
+#summary(reg21)
+#city_1 <- subset(city,year==1)
+#reg22 <- lm(formula= dlnl1 ~ dlnrain30, data=city_1)
+#summary(reg22)
+
+#reg22b <- lm(formula= dlnl1 ~ dlnrain30, data=city, index=c('agidison','year'))
+#summary(reg22b)
+
+#reg23 <- plm(dlnl1 ~ dlnrain30, data=city, model='pooling', index=c('agidison','year'))
+#summary(reg23)
+
+#reg24 <- plm(dlnl1 ~ dlnrain30, data=city, model='within', index=c('agidison','year'))
+#summary(reg24)
+
+coplot(lnl1 ~ year|rain30, type="l", data=subset(city,iso3v10=='COG')) # Lines
+coplot(lnl1 ~ year|rain30, type="b", data=subset(city,iso3v10=='COG')) # Points and lines
+
+scatterplot(lnl1 ~ year|agidison, boxplots=FALSE, smooth=TRUE, reg.line=FALSE, data=subset(city,iso3v10=='COG'))
+
+#k <- 0
+#mean_pays <- list()
+#deja <- list('bonjour')
+#for (i in city$iso3v10){
+#  if (i %in% deja){
+#    k<- k+1
+#  }
+#  else{
+#    mean_pays[k] <- mean(subset(city,iso3v10==i)$lnl1)
+#    k <- k+ 1
+#    deja[k] <- i
+#  }
+#}
+mean_pays[sapply(mean_pays, is.null)] <- NULL
+index <- which(duplicated(city$iso3v10))
+pays<- (city$iso3v10[-index])
+pays_ <- list()
+for (i in 1:41){
+  b <-pays[i]
+  pays_<-c(pays_,b)
+}
+
+heterog <- do.call(rbind, Map(data.frame, pays=pays_, mean_pays=mean_pays))
+
+k <- 0
+mean_annee <- list()
+deja <- list('bonjour')
+for (i in city$year){
+  if (i %in% deja){
+    k<- k+1
+  }
+  else{
+    mean_annee[k] <- mean(subset(city,year==i)$lnl1)
+    k <- k+ 1
+    deja[k] <- i
+  }
+}
+
+annee_ <- list()
+for (i in 1:16){
+  annee_<-c(annee_,i)
+}
+heterog2 <- do.call(rbind, Map(data.frame, annee=annee_, mean_annee=mean_annee))
+
+
+ggplot(heterog, aes(x=pays, y=mean_pays))+geom_line()+geom_point()
+ggplot(heterog2, aes(x=annee, y=mean_annee))+geom_line()+geom_point()
+
+reg25 <-lm(dlnl1 ~  dlnrain30+ factor(year) - 1, data=city)
+summary(reg25)
+plot(reg25)
+
+reg26 <- plm(dlnl1 ~ dlnrain30+extent_agE_dlnrain, data=city, model='within', index=c('agidison','year'))
+
+summary(reg26)    #fixed effects
+
+reg27 <- plm(dlnl1 ~ dlnrain30+extent_agE_dlnrain, data=city, model='random', index=c('agidison','year'))
+summary(reg27)    #random effects
+
+#To decide between fixed or random effects you can run a Hausman test where the null hypothesis is that the preferred model is random effects vs. the alternative the fixed effects (see Green, 2008, chapter 9). It basically tests whether the unique errors (ui) are correlated with the regressors, the null hypothesis is they are not. Run a fixed effects model and save the estimates, then run a random model and save the estimates, then perform the test. If the p-value is significant (for example <0.05) then use fixed effects, if not use random effects.
+phtest(reg26, reg27)  # => random effects 
+
+reg28 <- plm(dlnl1 ~ year + agidison + dlnrain30 + D_ag30 + hirain_extent_agH_dlnrain + hirain_extent_agE_dlnrain, data = city, model='random', index=c('agidison','year'))
+summary(reg28)
 
 ```
