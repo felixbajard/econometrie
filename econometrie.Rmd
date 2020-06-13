@@ -1,10 +1,7 @@
 ---
-title: "Econometrie"
-author: "Félix Bajard"
-date: "08/06/2020"
+title: "econo"
 output: html_document
 ---
-
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 remove(list = ls())
@@ -21,6 +18,9 @@ library(maxLik)
 library(micEcon)
 library(plm)
 library(foreign)
+library(stargazer)
+library(gridExtra)
+library(cowplot)
 ```
 
 Importing the databases
@@ -32,177 +32,243 @@ countryally <- read.dta13("countrydata_allyears.dta")
 region <- read.dta13("regiondata.dta")
 ```
 
+Descriptive Statistics
 
-```{r basic stats}
-ggplot(country, aes(year,sm0_2moistu, colour=iso3v10, group=iso3v10)) + geom_point() +geom_line()
-#urbanization rate
-for (i in 2:60){
-  if (country$iso3v10[i-1]==country$iso3v10[i]){
-    country$urbgrowth[i] <- (country$urbfrac[i]-country$urbfrac[i-1])/(country$urbfrac[i-1]*country$yearssince_prev_census[i]) 
-    country$moistgrowth[i] <- (country$sm0_2moistu[i]-country$sm0_2moistu[i-1])/(country$sm0_2moistu[i-1] *country$yearssince_prev_census[i]) 
-    country$tempgrowth[i] <- (country$sm0_2tmpu[i]-country$sm0_2tmpu[i-1])/(country$sm0_2tmpu[i-1] *country$yearssince_prev_census[i]) 
-    country$precgrowth[i] <- (country$sm0_2preu[i]-country$sm0_2preu[i-1])/(country$sm0_2preu[i-1] *country$yearssince_prev_census[i]) 
-  }
-}
-country$urbgrowth[36]<- NA #valeur énorme par rapport aux autres fausse
-reg1 <- lm(moistgrowth ~ urbgrowth, data = country)
-summary(reg1)
-ggplot(country, aes(urbgrowth,moistgrowth))+geom_point()+geom_smooth()
-reg2 <- lm(tempgrowth ~ urbgrowth, data = country)
-summary(reg2)
-ggplot(country, aes(urbgrowth,tempgrowth))+geom_point()+geom_smooth()
-reg3 <- lm(precgrowth ~ urbgrowth, data = country)
-summary(reg3)
-ggplot(country, aes(urbgrowth,precgrowth))+geom_point()+geom_smooth()
-#pas de corrélation observée au niveau national
-#aucune relation significative et R-squared ridicules
+```{r descriptive statistics and preliminary tests}
+#national urbanization
+plot1 <- ggplot(subset(countryally,iso3v10 %in% c('BEN','BFA','BWA','CAF','CMR')), aes(year,sm0_2moistu, colour=iso3v10, group=iso3v10)) + geom_point() +geom_line() + geom_smooth(method='lm')
+plot2 <- ggplot(subset(countryally,iso3v10 %in% c('BEN','BFA','BWA','CAF','CMR')), aes(year,sm0_2tmpu, colour=iso3v10, group=iso3v10)) + geom_point() +geom_line() + geom_smooth(method='lm')
+plot3 <- ggplot(subset(countryally,iso3v10 %in% c('BEN','BFA','BWA','CAF','CMR')), aes(year,urbfrac, colour=iso3v10, group=iso3v10)) + geom_point() +geom_line() + geom_smooth(method='lm')
+plot4 <- ggplot(subset(countryally,iso3v10 %in% c('BEN','BFA','BWA','CAF','CMR')), aes(year,sm0_2preu, colour=iso3v10, group=iso3v10)) + geom_point() +geom_line() + geom_smooth(method='lm')
+plot_grid(plot1, plot2, plot4, plot3, labels=c("Moisture", "Temperature", "Precipitations","Urbanization"), ncol = 2, nrow = 2)
 
+city_ <- city[1:144,]
+city_$agidison <- as.character(city_$agidison)
+colnames(city_)[2] <- 'cityID'
+coplot(lnl1 ~ year|cityID, type="l", data=city_) # Lines
+coplot(lnl1 ~ cityID|year, type="l", data=city_)
+
+#scatterplot(lnl1 ~ year|agidison, boxplots=FALSE, smooth=TRUE, reg.line=FALSE, data=subset(city,iso3v10=='COG'))
+
+# 
+# k <- 0
+# mean_pays <- list()
+# deja <- list('bonjour')
+# for (i in city$iso3v10){
+#   if (i %in% deja){
+#     k<- k+1
+#   }
+#   else{
+#     mean_pays[k] <- mean(subset(city,iso3v10==i)$lnl1)
+#     k <- k+ 1
+#     deja[k] <- i
+#   }
+# }
+# mean_pays[sapply(mean_pays, is.null)] <- NULL
+# index <- which(duplicated(city$iso3v10))
+# pays<- (city$iso3v10[-index])
+# pays_ <- list()
+# for (i in 1:41){
+#   b <-pays[i]
+#   pays_<-c(pays_,b)
+# }
+# heterog <- do.call(rbind, Map(data.frame, pays=pays_, mean_pays=mean_pays))
+# k <- 0
+# mean_annee <- list()
+# deja <- list('bonjour')
+# for (i in city$year){
+#   if (i %in% deja){
+#     k<- k+1
+#   }
+#   else{
+#     mean_annee[k] <- mean(subset(city,year==i)$lnl1)
+#     k <- k+ 1
+#     deja[k] <- i
+#   }
+# }
+# annee_ <- list()
+# for (i in 1:16){
+#   annee_<-c(annee_,i)
+# }
+# heterog2 <- do.call(rbind, Map(data.frame, annee=annee_, mean_annee=mean_annee))
+# ggplot(heterog, aes(x=pays, y=mean_pays))+geom_line()+geom_point()
+# ggplot(heterog2, aes(x=annee, y=mean_annee))+geom_line()+geom_point()
+
+
+#is data heterogenous, do we need to consider it as panel data or can we consider it as longitudinal? 
+#1. Economic Interpretation 
+#2. Specification Tests -> between and within individuals. unobserved heterogeneity (differs from observed heterogeneity which we can account for by adding variables)
+#Are there individual effects or is it preferable to ignore them and to estimate by pooled OLS? Are there time effects on top of the individual effects?
+#levene test 
+leveneTest(dlnl1~as.character(agidison),data=city) #p-value < 2.2e-16 => the variance is not homogenous
+leveneTest(ADurbfrac~iso3v10,data=country) #p-value 0.4326 => the variance is homogenous, we can consider the data as simply cross sectional
+lvtest<-leveneTest(ADurbfrac~as.character(afruid),data=region) #p-value 0.01441 => the variance is not homogenous
+ggplot(lvtest)
+
+scatterplot(dlnl1~dlnrain30|agidison, data=city[1:144,], boxplots=FALSE, ylab="d(log(light))", xlab="d(log(rain))",smooth=FALSE, legend=FALSE)
+scatterplot(ADurbfrac~ADsm0_2moistu|afruid, data=region[1:50,], boxplots=FALSE, xlab="d(moisture)", ylab="d(urban fraction)",smooth=FALSE,legend=FALSE)
+scatterplot(ADurbfrac~ADsm0_2moistu|iso3v10, data=country, boxplots=FALSE, xlab="d(moitsure)", ylab="d(urban fraction)",smooth=FALSE,legend=FALSE)
+
+#clearly heterogenous: heterogeneous panel data model is a model in which all parameters (constant and slope coefficients) vary accross individuals.
+
+#extended chow test to N regressions
+#pooling tests to check poolability, i.e. the hypothesis that the same coefficients apply across all individuals, if the homogeneity assumption over the coefficients is established, the next step is to establish the presence of unobserved effects, comparing the null of spherical residuals with the alternative of group (time) specific effects in the error term,
+test1a <- plm(dlnl1 ~ dlnrain30, data=city, model='within', index=c('agidison','year')); test1b <- plm(dlnl1 ~ dlnrain30, data=city, model='pooling', index=c('agidison','year')) 
+test2a <- plm(ADurbfrac ~  ADsm0_2moistu, data = country, model = 'within', index = c('iso3v10','year'))
+test2b <- plm(ADurbfrac ~  ADsm0_2moistu, data = country, model = 'pooling', index = c('iso3v10','year'))
+test3a <- plm(ADurbfrac ~  ADsm0_2moistu, data = region, model = 'within', index = c('afruid','countryyear'))
+test3b <- plm(ADurbfrac ~  ADsm0_2moistu, data = region, model = 'pooling', index = c('afruid','countryyear'))
+
+pooltest(test1a,test1b) #we reject potential pooling there are individual effects F = 0.25963
+pooltest(test2a,test2b) #same 
+pooltest(test3a,test3b) #same 
+
+
+reg00 <- lm(ADurbfrac ~  ADsm0_2moistu + firsturbfrac, data = region)
+summary(reg00)
+plot(reg00)
 ```
-```{r first tests}
-reg9 <- lm (urbpop ~ tmpu + petu + preu + year + totpop + centdistcoast + extent_agH + extent_agE, data = region)
-summary(reg9)
-
-reg10 <- lm(urbpop ~ tmpu + petu + preu + year + totpop, data = region)
-summary(reg10)
-
-reg11 <- lm(urbpop ~ ADsm0_2moistu + ADsm0_2tmpu + ADsm0_2preu + year + totpop + primurbpop + sum_agH + sum_agE, data = country)
-summary(reg11)
-
-reg12 <- lm(lnl1 ~ agidison + lnrain30 + hirain + extent_agE + extent_agH, data = city)
-summary(reg12)
-
-reg13 <- lm(dlnl1 ~ year + dlnrain30 + D_ag30 + hirain_extent_agH_dlnrain + hirain_extent_agE_dlnrain, data = city)
-summary(reg13)
-
-reg14 <- lm(dlnl1 ~ year + agidison + dlnrain30 + D_ag30 + hirain_extent_agH_dlnrain + hirain_extent_agE_dlnrain, data = city)
-summary(reg14)
-
-reg15 <- lm(dlnl1 ~ year + agidison + dlnrain30 + D_ag30 + extent_agH + extent_agE + hirain_extent_agH_dlnrain + hirain_extent_agE_dlnrain, data = city)
-summary(reg15)
-reg16 <- lm(ADurbfrac ~ ADsm0_2moistu + ADsm0_2preu + ADsm0_2tmpu + extent_agE + extent_agH + centdistcoast + totpop, data = region)
-summary(reg16)
-reg17 <- lm(ADurbfrac ~ ADsm0_2moistu + ADsm0_2preu + ADsm0_2tmpu + extent_agE + extent_agH + centdistcoast + firsturbfrac, data = region)
-summary(reg17)
-reg18 <- lm(ADurbfrac ~ ADsm0_2moistu + ADsm0_2preu + ADsm0_2tmpu + extent_agE + extent_agH + centdistcoast + firsturbfrac + areasqkm + extent_agH_ADsm0_2moistu + extent_agH_ADsm0_2preu + extent_agH_ADsm0_2tmpu, data = region)
-summary(reg18)
-#cela ne donne rien du tout de rajouter cela
-reg19 <- lm(ADurbfrac ~ ADsm0_2moistu + ADsm0_2preu + ADsm0_2tmpu + extent_agE + extent_agH + centdistcoast + D_moist_GT1 + totpop, data = region)
-summary(reg19)
-#bof aussi mais coeff significatifs sont a peu près égaux avec ceux de la 16
-```
-```{r encore}
-#reg20 <- ivreg(ADurbfrac ~ ADsm0_2moistu + extent_agE + extent_agH | extent_agE+ extent_agH+ centdistcoast + firsturbfrac + areasqkm, data = region)
-#summary(reg20)
-
-#reg21 <- plm(dlnl1 ~ dlnrain30+extent_agE_dlnrain, data = city, model = "random", index = "agidison")
-#summary(reg21)
-#city_1 <- subset(city,year==1)
-#reg22 <- lm(formula= dlnl1 ~ dlnrain30, data=city_1)
-#summary(reg22)
-
-#reg22b <- lm(formula= dlnl1 ~ dlnrain30, data=city, index=c('agidison','year'))
-#summary(reg22b)
-
-#reg23 <- plm(dlnl1 ~ dlnrain30, data=city, model='pooling', index=c('agidison','year'))
-#summary(reg23)
-
-#reg24 <- plm(dlnl1 ~ dlnrain30, data=city, model='within', index=c('agidison','year'))
-#summary(reg24)
-
-coplot(lnl1 ~ year|rain30, type="l", data=subset(city,iso3v10=='COG')) # Lines
-coplot(lnl1 ~ year|rain30, type="b", data=subset(city,iso3v10=='COG')) # Points and lines
-
-scatterplot(lnl1 ~ year|agidison, boxplots=FALSE, smooth=TRUE, reg.line=FALSE, data=subset(city,iso3v10=='COG'))
-
-#k <- 0
-#mean_pays <- list()
-#deja <- list('bonjour')
-#for (i in city$iso3v10){
-#  if (i %in% deja){
-#    k<- k+1
-#  }
-#  else{
-#    mean_pays[k] <- mean(subset(city,iso3v10==i)$lnl1)
-#    k <- k+ 1
-#    deja[k] <- i
-#  }
-#}
-mean_pays[sapply(mean_pays, is.null)] <- NULL
-index <- which(duplicated(city$iso3v10))
-pays<- (city$iso3v10[-index])
-pays_ <- list()
-for (i in 1:41){
-  b <-pays[i]
-  pays_<-c(pays_,b)
-}
-
-heterog <- do.call(rbind, Map(data.frame, pays=pays_, mean_pays=mean_pays))
-
-k <- 0
-mean_annee <- list()
-deja <- list('bonjour')
-for (i in city$year){
-  if (i %in% deja){
-    k<- k+1
-  }
-  else{
-    mean_annee[k] <- mean(subset(city,year==i)$lnl1)
-    k <- k+ 1
-    deja[k] <- i
-  }
-}
-
-annee_ <- list()
-for (i in 1:16){
-  annee_<-c(annee_,i)
-}
-heterog2 <- do.call(rbind, Map(data.frame, annee=annee_, mean_annee=mean_annee))
 
 
-ggplot(heterog, aes(x=pays, y=mean_pays))+geom_line()+geom_point()
-ggplot(heterog2, aes(x=annee, y=mean_annee))+geom_line()+geom_point()
 
-reg25 <-lm(dlnl1 ~  dlnrain30+hirain_dlnrain+ factor(year) - 1, data=city)
-summary(reg25)
-plot(reg25)
-#^pour tenir compte des fixed effects de l'année du test
 
-reg25b <-lm(dlnl1 ~  dlnrain30+hirain_dlnrain+ factor(agidison) - 1, data=city)
-summary(reg25b)
-#^pour tenir compte des fixed effects de la ville du test
 
-reg25c <-lm(dlnl1 ~  dlnrain30+hirain_dlnrain+ factor(iso3v10) - 1, data=city)
-summary(reg25c)
-#^pour tenir compte des fixed effects du pays du test
+```{r Regional}
+#effets uniquement de l'humidité
+re16a0 <- plm(ADurbfrac ~  ADsm0_2moistu + firsturbfrac, data = region, model = 'within', index = c('afruid','countryyear'), effect='individual')
 
-reg25d <-lm(dlnl1 ~  dlnrain30+hirain_dlnrain+ agidison + year - 1, data=city)
-summary(reg25d)
-#^combined fixed effects
+re16a <- plm(ADurbfrac ~  ADsm0_2moistu + firsturbfrac, data = region, model = 'within', index = c('afruid','countryyear'), effect='time')
 
-reg25e <-plm(dlnl1 ~  dlnrain30+hirain_dlnrain+agidison+year, data=city, model='within', effect='twoways', index=c('agidison','year'))
-summary(reg25e)
-#^combined fixed effects (même chose qu'au dessus normalement!!!!!)
+re16arandom <- plm(ADurbfrac ~  ADsm0_2moistu + firsturbfrac, data = region, model = 'random', index = c('afruid','countryyear'), effect='time')
 
-reg26 <- plm(dlnl1 ~ dlnrain30+extent_agE_dlnrain, data=city, model='within', index=c('agidison','year'))
+#controlling for the influence of industries
+#modern industries (9) 
+re17a <- plm(ADurbfrac ~  ADsm0_2moistu + firsturbfrac+ extent_agE + extent_agE_ADsm0_2moistu , data = region, model = 'within', index = c('afruid','countryyear'), effect='time')
+#all industries (14)
+re18a <- plm(ADurbfrac ~  ADsm0_2moistu + firsturbfrac+ extent_agH + extent_agH_ADsm0_2moistu , data = region, model = 'within',  index = c('afruid','countryyear'), effect='time')
 
-summary(reg26)    #fixed effects
+#adding controls, not many of them are significative, appart from moisture WHEN random effects (and not fixed, see down further)
+re19a <- plm(ADurbfrac ~  ADsm0_2moistu + firsturbfrac + extent_agE + extent_agE_ADsm0_2moistu + D_moist_GT1 + centdistcoast +moistu +mean_moistu1950_69, data = region, model = 'within', index = c('afruid','countryyear'), effect='time') 
 
-reg27 <- plm(dlnl1 ~ dlnrain30+extent_agE_dlnrain, data=city, model='random', index=c('agidison','year'))
-summary(reg27)    #random effects
+re19arandom <- plm(ADurbfrac ~  ADsm0_2moistu + firsturbfrac + extent_agE + extent_agE_ADsm0_2moistu + D_moist_GT1 + centdistcoast +moistu +mean_moistu1950_69, data = region, model = 'random', index = c('afruid','countryyear'), effect='time')
 
+stargazer(re16a, re17a, re18a, re19a, title = 'Results', align = TRUE, omit='countryyear', type='text')
+#when regressing only on the moisture, no significant results. However, adding the product industries*moisture render the relation significantly negative between d(urbfrac) and d(moist), and the positive relation between d(urbfrac) and indus*d(moist) indicates that the effects of climate change on urbanization will be felt only where there is strong export industries. (the industries indicator is that of the absence of such industries, therefore only when it is high enough the product effect will overcome the moisture effect alone and climate change won't impact urbanization)
+
+phtest(re16a,re16arandom); phtest(re19a,re19arandom) #Hausman Test to determine which is better between fixed and random effects: p-value>0.05 => need random effects
 #To decide between fixed or random effects you can run a Hausman test where the null hypothesis is that the preferred model is random effects vs. the alternative the fixed effects (see Green, 2008, chapter 9). It basically tests whether the unique errors (ui) are correlated with the regressors, the null hypothesis is they are not. Run a fixed effects model and save the estimates, then run a random model and save the estimates, then perform the test. If the p-value is significant (for example <0.05) then use fixed effects, if not use random effects.
-phtest(reg26, reg27)  # => random effects 
 
-reg28 <- plm(dlnl1 ~ dlnrain30 + D_ag30_dlnrain + extent_agE_dlnrain, data = city, model='random', index=c('agidison'))
-summary(reg28)
+stargazer(re16a, re16arandom, re19a, re19arandom, type='text')
 
+pFtest(re16a,re16a0) #Testing for time-fixed effects: alternative hypothesis has significant effects, hence we did good taking time-fixed effects F=0.32461
 
-reg29 <- plm(dlnl1 ~ dlnrain30 + hirain_dlnrain, data = city, model='random', index=c('agidison','year'))
-summary(reg29)
+bptest(re16arandom); bptest(re19arandom)  #Breusch-Pagan heteroskedasticity test: p-value<0.05 => heteroskedasticty present, we need to include robust standard errors, which we do below
 
-reg30 <- plm(dlnl1 ~ dlnrain30+ extent_agH_dlnrain, data = city, model='random', index=c('agidison','year'))
-summary(reg30)
+re16arobust <- coeftest(re16arandom,vcov=vcovHC(re16arandom, type='HC3'))  #HC3 – Recommended for small samples.
+summary(re16arobust)
+stargazer(re16arandom, re16arobust, type='text')  #the coefficients are barely touched
+stargazer(re19arandom, coeftest(re19arandom,vcov=vcovHC(re19arandom, type='HC3')), type='text')  #the standard errors are a bit stronger
+
+#no need to test for serial correlation (nor for cross-sectional dependance) since we are working on micro panels (few years and large number of cases).
+
+#comparatif effets de l'humidité, des précipitations et de la température
+re20a <- plm(ADurbfrac ~  ADsm0_2moistu + firsturbfrac+ extent_agE + extent_agE_ADsm0_2moistu , data = region, model = 'random', index = c('afruid','countryyear'), effect='time')
+
+re21a <- plm(ADurbfrac ~  ADsm0_2preu + firsturbfrac+ extent_agE + extent_agE_ADsm0_2preu , data = region, model = 'random',  index = c('afruid','countryyear'), effect='time')
+
+re22a <- plm(ADurbfrac ~  ADsm0_2tmpu + firsturbfrac + extent_agE + extent_agE_ADsm0_2tmpu, data = region, model = 'random', index = c('afruid','countryyear'), effect='time')
+
+stargazer(re20a, re21a, re22a, title = 'Results', align = TRUE, omit='countryyear', type='text')
+
 ```
 
+```{r National}
+#effets uniquement de l'humidité
+re160 <- plm(ADurbfrac ~  ADsm0_2moistu + urbfrac, data = country, model = 'within', index = c('iso3v10','year'), effect='individual')
+
+re16b <- plm(ADurbfrac ~  ADsm0_2moistu + urbfrac, data = country, model = 'within', index = c('iso3v10','year'), effect='time')
+
+re16brandom <- plm(ADurbfrac ~  ADsm0_2moistu + urbfrac, data = country, model = 'random', index = c('iso3v10','year'), effect='time')
+
+#controlling for the influence of industries
+#modern industries (9) 
+re17b <- plm(ADurbfrac ~  ADsm0_2moistu + urbfrac+ sum_agE + sum_agE_ADmoistu , data = country, model = 'within', index = c('iso3v10','year'), effect='time')
+
+#all industries (14)
+re18b <- plm(ADurbfrac ~  ADsm0_2moistu + urbfrac+ sum_agH + sum_agH_ADmoistu , data = country, model = 'within', index = c('iso3v10','year'), effect='time')
+
+#adding controls, not many of them are significative, appart from moisture WHEN random effects (and not fixed, see down further)
+re19b <- plm(ADurbfrac ~  ADsm0_2moistu + urbfrac + sum_agE + sum_agE_ADmoistu + totpop +urbpop +areasqkm, data = country, model = 'within', index = c('iso3v10','year'), effect='time') 
+
+re19brandom <- plm(ADurbfrac ~  ADsm0_2moistu + urbfrac + sum_agE + sum_agE_ADmoistu +  totpop +urbpop +areasqkm, data = country, model = 'random', index = c('iso3v10','year'), effect='time')
+
+stargazer(re16b, re17b, re18b, re19b, title = 'Results', align = TRUE, omit='countryyear', type='text')
+#when regressing only on the moisture, no significant results. However, adding the product industries*moisture render the relation significantly negative between d(urbfrac) and d(moist), and the positive relation between d(urbfrac) and indus*d(moist) indicates that the effects of climate change on urbanization will be felt only where there is strong export industries. (the industries indicator is that of the absence of such industries, therefore only when it is high enough the product effect will overcome the moisture effect alone and climate change won't impact urbanization)
+
+phtest(re16b,re16brandom); phtest(re19b,re19brandom) #Hausman Test to determine which is better between fixed and random effects: p-value>0.05 => need random effects
+
+stargazer(re16b, re16brandom, re19b, re19brandom, type='text')
+
+pFtest(re16b,re160) #Testing for time-fixed effects: alternative hypothesis has significant effects, hence we did good taking time-fixed effects F=0.050349
+
+bptest(re16brandom); bptest(re19brandom)  #Breusch-Pagan heteroskedasticity test: p-value>0.05 => no heteroskedasticty, no need to include robust standard errors
+#no need to test for serial correlation (nor for cross-sectional dependance) since we are working on micro panels (few years and large number of cases).
+
+#comparatif effets de l'humidité, des précipitations et de la température
+re20b <- plm(ADurbfrac ~  ADsm0_2moistu + urbfrac+ sum_agE + sum_agE_ADmoistu , data = country, model = 'random', index = c('iso3v10','year'), effect='time')
+
+re21b <- plm(ADurbfrac ~  ADsm0_2preu + urbfrac+ sum_agE + sum_agE_ADpreu , data = country, model = 'random', index = c('iso3v10','year'), effect='time')
+
+re22b <- plm(ADurbfrac ~  ADsm0_2tmpu + urbfrac + sum_agE + I(sum_agE*ADsm0_2tmpu), data = country, model = 'random', index = c('iso3v10','year'), effect='time')
+
+stargazer(re20b, re21b, re22b, title = 'Results', align = TRUE, omit='countryyear', type='text')
+#aucun résultat significatif
+
+#what about primate cities? 
+re23b <- plm(ADprimatefrac ~  ADsm0_2moistu +primatefrac, data = country, model = 'random', index = c('iso3v10','year'), effect='time')
+re24b <- plm(ADprimatefrac ~  ADsm0_2moistu + primatefrac + sum_agE + sum_agE_primwide_ADmoistu, data=country, model = 'random', index = c('iso3v10','year'), effect='time')
+re25b <- plm(ADprimatefrac ~  ADsm0_2moistu + primatefrac + sum_agH + sum_agH_primwide_ADmoistu, data=country, model = 'random', index = c('iso3v10','year'), effect='time')
+
+stargazer(re23b,re24b,re25b,type='text')
+```
+
+```{r City}
+#effets uniquement de l'humidité
+reg0 <- plm(dlnl1 ~  dlnrain30, data = city, model = 'within', index = c('agidison','year'), effect='individual')
+reg1f <- plm(dlnl1 ~  dlnrain30, data = city, model = 'within', index = c('agidison','year'), effect='time')
+pFtest(reg1f,reg0) #Testing for time-fixed effects: alternative hypothesis has significant effects, hence we did good taking time-fixed effects F=0.32461
+stargazer(reg0,reg1f,type='text')
+
+reg1 <- plm(dlnl1 ~  dlnrain30, data = city, model = 'random', index = c('agidison','year'), effect='time')
+phtest(reg1f,reg1) #random effects better
+stargazer(reg1f,reg1,type='text')
+
+#controlling for the influence of industries
+#modern industries (9)
+reg2_9 <- plm(dlnl1 ~ dlnrain30 + extent_agE_dlnrain , data = city,  model = 'random', index = c('agidison','year'), effect='time')
+#all industries (14) 
+reg2_14 <- plm(dlnl1 ~ dlnrain30 + extent_agH_dlnrain , data = city, model = 'random', index = c('agidison','year'), effect='time')
+stargazer(reg1,reg2_9,reg2_14,type='text')
+
+#testing for heteroskedasticity
+bptest(reg2_14); bptest(reg1) #no heteroskedasticity at 5% levels
 
 
+#testing for contemporaneous correlation, b-p lagrange mutiplier test
+pcdtest(reg2_14, test = c("lm")) #low p-value => there is cross-sectional dependence, hence the need for robust std errors!
+
+#controlling for serial correlation, breusch-godfrey/wooldridge
+pbgtest(reg2_14) #there is serial correlation in idiosyncratic errors
+
+#since we have small T, large N, all we have to do to deal with these issues is clustering robust standard errors
+reg2_14r <-coeftest(reg2_14,vcov=vcovHC(reg2_14, type='sss', cluster='group'))
+stargazer(reg2_14, reg2_14r, type='text')  #significance appears!!
+
+#adding controls
+reg3 <-  plm(dlnl1 ~ dlnrain30 + extent_agH_dlnrain + D_ag30_dlnrain +hirain_dlnrain +hirain_extent_agH_dlnrain, data = city, model = 'random', index = c('agidison','year'), effect='time')
+reg4 <- plm(dlnl1 ~ dlnrain30 + extent_agH_dlnrain + Lnatconflict + Lcflcnt3 +Lcflcnt3_50, data = city, model = 'random', index = c('agidison','year'), effect='time')
+reg3r <- coeftest(reg3,vcovHC(reg3,type='sss',cluster='group'))
+reg4r <- coeftest(reg4,vcovHC(reg4,type='sss',cluster='group'))
+stargazer(reg2_14r,reg3r,reg4r, title = 'Results', align = TRUE, omit='countryyear', type='text')
+
+```
